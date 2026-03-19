@@ -938,6 +938,58 @@ textarea { resize: none; height: 80px; }
   </div>
 </div>
 
+<!-- ═══════════════════════════════════ -->
+<!--  SCREEN 5: WATER FLOW DIAGRAM     -->
+<!-- ═══════════════════════════════════ -->
+<div class="screen" id="screen-diagram">
+
+  <div class="section-title">Building Water Flow Diagram</div>
+
+  <div class="card" style="margin-bottom:10px;">
+    <div class="card-body" style="padding:10px 14px;">
+      <div class="field-row" style="margin-bottom:0;">
+        <div class="field" style="margin-bottom:0;">
+          <label>Building Type</label>
+          <select id="diag-type" onchange="renderDiagram()">
+            <option value="hospital">Hospital / Healthcare</option>
+            <option value="office">Office High-Rise</option>
+            <option value="hotel">Hotel / Lodging</option>
+          </select>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label>View</label>
+          <select id="diag-view" onchange="renderDiagram()">
+            <option value="full">Full Building</option>
+            <option value="riser">Riser Schematic</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:8px 12px;background:#fff;border:1px solid var(--border);border-radius:8px;">
+    <div style="display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:0.6rem;"><div style="width:24px;height:4px;background:#0077cc;border-radius:2px;"></div>Cold</div>
+    <div style="display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:0.6rem;"><div style="width:24px;height:4px;background:#cc3300;border-radius:2px;"></div>Hot</div>
+    <div style="display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:0.6rem;"><div style="width:24px;height:0;border-top:3px dashed #888;"></div>Drain/DWV</div>
+    <div style="display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:0.6rem;"><div style="width:24px;height:2px;background:#aaa;border-top:2px dotted #aaa;"></div>Vent</div>
+    <div style="display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:0.6rem;"><div style="width:10px;height:10px;border-radius:50%;background:#c42b00;"></div>HIGH</div>
+    <div style="display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:0.6rem;"><div style="width:10px;height:10px;border-radius:50%;background:#c45c00;"></div>MED</div>
+    <div style="display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:0.6rem;"><div style="width:10px;height:10px;border-radius:50%;background:#1a6b3c;"></div>LOW</div>
+  </div>
+
+  <!-- Diagram canvas -->
+  <div style="background:#f0f4f8;border:1px solid var(--border);border-radius:10px;overflow:hidden;overflow-x:auto;">
+    <svg id="flow-diagram-svg" viewBox="0 0 420 700" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;min-width:320px;">
+    </svg>
+  </div>
+
+  <p style="margin-top:10px;font-family:var(--mono);font-size:0.6rem;color:var(--muted);text-align:center;line-height:1.6;">
+    Schematic only · not to scale · Per ASHRAE 188-2021
+  </p>
+
+</div>
+
 <!-- BOTTOM NAV -->
 <nav class="bottom-nav">
   <button class="nav-btn active" id="nav-inspect" onclick="showScreen('screen-inspect')">
@@ -947,6 +999,10 @@ textarea { resize: none; height: 80px; }
   <button class="nav-btn" id="nav-dash" onclick="showScreen('screen-dash')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
     DASH
+  </button>
+  <button class="nav-btn" id="nav-diagram" onclick="showScreen('screen-diagram')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    DIAGRAM
   </button>
   <button class="nav-btn" id="nav-outputs" onclick="showScreen('screen-outputs')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -983,10 +1039,13 @@ const DEVICES = [
 // ── INIT ──
 window.onload = () => {
   renderDeviceChecklist();
-  addSample(); // default first sample row
+  addSample();
   setToday();
   refreshDashboard();
   renderOutputSummary();
+  renderDiagram();
+  // Wire after a tick so all DOM elements exist
+  setTimeout(wireInputListeners, 100);
 };
 
 function setToday() {
@@ -1002,13 +1061,212 @@ function showScreen(id) {
   document.getElementById(id).classList.add('active');
   const map = {
     'screen-inspect':'nav-inspect','screen-dash':'nav-dash',
-    'screen-outputs':'nav-outputs','screen-settings':'nav-settings'
+    'screen-diagram':'nav-diagram','screen-outputs':'nav-outputs',
+    'screen-settings':'nav-settings'
   };
   document.getElementById(map[id]).classList.add('active');
   if (id === 'screen-dash') refreshDashboard();
   if (id === 'screen-outputs') renderOutputSummary();
+  if (id === 'screen-diagram') renderDiagram();
   window.scrollTo(0,0);
 }
+
+// ── WATER FLOW DIAGRAM (old static version replaced — see buildDiagramSVG below) ──
+const configs = { _unused: {
+    hospital: {
+      floors: [
+        { label: 'ROOFTOP', color: '#e8f0ff', border: '#3355cc', fixtures: [
+            { name: 'Cooling Tower A', risk: 'medium', x: 110, items: ['Makeup water in','Blowdown → drain','Cl₂: 0.55 ppm'] },
+            { name: 'Cooling Tower B', risk: 'low',    x: 260, items: ['Makeup water in','Blowdown → drain','Cl₂: 0.61 ppm'] },
+        ]},
+        { label: 'FLOORS 14–22  ⚠ HIGH RISK', color: '#fff0f0', border: '#c42b00', fixtures: [
+            { name: 'Patient Shower (SP-04)', risk: 'high',   x: 110, items: ['Cold in → mix valve','Hot in → mix valve','Drain → stack','119°F | 0.08 ppm Cl₂'] },
+            { name: 'Distal Faucet (SP-06)',  risk: 'high',   x: 260, items: ['Cold in → aerator','Hot in → aerator','Drain → P-trap','117°F | 0.07 ppm Cl₂'] },
+        ]},
+        { label: 'FLOOR 6  —  OR Suite', color: '#fffbf0', border: '#c45c00', fixtures: [
+            { name: 'Eyewash Stn (SP-09)', risk: 'medium', x: 110, items: ['Cold only → head','Floor drain out','64°F | stagnant'] },
+            { name: 'Patient Sink',        risk: 'low',    x: 260, items: ['Cold in → faucet','Hot in → faucet','Drain → P-trap'] },
+        ]},
+        { label: 'FLOOR 1  —  Dietary', color: '#f0fff4', border: '#1a6b3c', fixtures: [
+            { name: 'Ice Machine (SP-10)', risk: 'low',    x: 110, items: ['Cold in → filter','Condensate drain','58°F | 0.41 ppm'] },
+            { name: 'Dietary Sink',        risk: 'low',    x: 260, items: ['Cold in → faucet','Hot in → faucet','Drain → P-trap'] },
+        ]},
+        { label: 'UTILITY / BASEMENT', color: '#f0f4ff', border: '#004499', fixtures: [] },
+      ]
+    },
+    office: {
+      floors: [
+        { label: 'ROOFTOP', color: '#e8f0ff', border: '#3355cc', fixtures: [
+            { name: 'Cooling Tower',    risk: 'high',   x: 110, items: ['Makeup water in','Blowdown → drain','Biocide dosing'] },
+            { name: 'HVAC Humidifier', risk: 'medium', x: 260, items: ['Cold in → steam','Condensate drain','Filter monthly'] },
+        ]},
+        { label: 'UPPER FLOORS  —  Tenant Suites', color: '#f5f5ff', border: '#5544cc', fixtures: [
+            { name: 'Distal Faucet', risk: 'medium', x: 110, items: ['Cold in → aerator','Hot in → aerator','Drain → P-trap'] },
+            { name: 'Break Room Sink', risk: 'low',  x: 260, items: ['Cold in → faucet','Hot in → faucet','Drain → P-trap'] },
+        ]},
+        { label: 'MID FLOORS  —  Restrooms', color: '#fffbf0', border: '#c45c00', fixtures: [
+            { name: 'Restroom Faucet', risk: 'low',    x: 110, items: ['Cold in → sensor','Hot in → sensor','Drain → P-trap'] },
+            { name: 'Drinking Fount.', risk: 'low',    x: 260, items: ['Cold only → filter','Drain → line','Flush weekly'] },
+        ]},
+        { label: 'FLOOR 1  —  Lobby', color: '#f0fff4', border: '#1a6b3c', fixtures: [
+            { name: 'Lobby Fountain',  risk: 'medium', x: 110, items: ['Recirculating pump','Chemical treatment','Drain → basin'] },
+            { name: 'Lobby Sink',      risk: 'low',    x: 260, items: ['Cold in → faucet','Hot in → faucet','Drain → P-trap'] },
+        ]},
+        { label: 'UTILITY / BASEMENT', color: '#f0f4ff', border: '#004499', fixtures: [] },
+      ]
+    },
+    hotel: {
+      floors: [
+        { label: 'ROOFTOP  —  Pool / Spa', color: '#e8f0ff', border: '#3355cc', fixtures: [
+            { name: 'Spa / Hot Tub',    risk: 'high',   x: 110, items: ['Recirculating pump','Aerosolization risk','Cl₂ ≥ 3 ppm req.'] },
+            { name: 'Cooling Tower',    risk: 'high',   x: 260, items: ['Makeup water in','Blowdown → drain','Biocide program'] },
+        ]},
+        { label: 'GUEST FLOORS  —  Upper', color: '#fff0f0', border: '#c45c00', fixtures: [
+            { name: 'Guest Shower',     risk: 'high',   x: 110, items: ['Cold in → mix valve','Hot in → mix valve','Drain → trap','Flush on checkout'] },
+            { name: 'Guest Sink',       risk: 'medium', x: 260, items: ['Cold in → aerator','Hot in → aerator','Drain → P-trap'] },
+        ]},
+        { label: 'GUEST FLOORS  —  Lower', color: '#fffbf0', border: '#1a6b3c', fixtures: [
+            { name: 'Guest Shower',     risk: 'medium', x: 110, items: ['Cold in → mix valve','Hot in → mix valve','Drain → trap'] },
+            { name: 'Ice Machine',      risk: 'medium', x: 260, items: ['Cold in → filter','Condensate drain','Clean quarterly'] },
+        ]},
+        { label: 'FLOOR 1  —  Restaurant / Lobby', color: '#f0fff4', border: '#1a6b3c', fixtures: [
+            { name: 'Kitchen Sink',     risk: 'low',    x: 110, items: ['Cold in → faucet','Hot in → faucet','Grease trap → drain'] },
+            { name: 'Decorative Fount.', risk: 'medium', x: 260, items: ['Recirculating','Mist aerosolizes','Biocide + UV req.'] },
+        ]},
+        { label: 'UTILITY / BASEMENT', color: '#f0f4ff', border: '#004499', fixtures: [] },
+      ]
+    }
+  };
+
+  const cfg = configs[type];
+  const floors = cfg.floors;
+  const W = 420, TOTAL_H = 700;
+  const floorH = 118;
+  const utilH = 80;
+  const gap = 4;
+  const TRUNK_X = 38, HOT_X = 52, DWV_X = 64, VENT_X = 408;
+  const MARGIN = 18;
+
+  // Floor Y positions (bottom to top in SVG = top to bottom visually, so we reverse)
+  // SVG Y increases downward, so rooftop = lowest Y value (top of SVG)
+  const floorYs = floors.map((_, i) => {
+    if (i === floors.length - 1) return TOTAL_H - utilH - gap * i; // utility at bottom
+    return i * (floorH + gap);
+  });
+  // Recalculate cleanly
+  const fY = []; // top-y of each floor zone (0=rooftop, last=utility)
+  let curY = 10;
+  for (let i = 0; i < floors.length - 1; i++) {
+    fY.push(curY);
+    curY += floorH + gap;
+  }
+  fY.push(curY); // utility
+  const utilTop = curY;
+
+  let html = '';
+
+  const riskColor   = r => r==='high'?'#c42b00':r==='medium'?'#c45c00':'#1a6b3c';
+  const riskBg      = r => r==='high'?'#fff0f0':r==='medium'?'#fff8f0':'#f0fff4';
+
+  // ── FLOOR BACKGROUNDS ──
+  floors.forEach((fl, i) => {
+    const fh = i === floors.length - 1 ? utilH : floorH;
+    html += `<rect x="${MARGIN}" y="${fY[i]}" width="${W - MARGIN*2}" height="${fh}" rx="6" fill="${fl.color}" stroke="${fl.border}" stroke-width="1.2"/>`;
+    html += `<text x="${MARGIN+8}" y="${fY[i]+14}" font-family="monospace" font-size="8" font-weight="bold" fill="${fl.border}">${fl.label}</text>`;
+  });
+
+  // ── MAIN TRUNKS (full height) ──
+  const trunkTop = fY[0] + 20;
+  const trunkBot = utilTop + utilH - 14;
+
+  // Cold trunk
+  html += `<line x1="${TRUNK_X}" y1="${trunkTop}" x2="${TRUNK_X}" y2="${trunkBot}" stroke="#0077cc" stroke-width="4" stroke-linecap="round"/>`;
+  // Hot trunk
+  html += `<line x1="${HOT_X}" y1="${trunkTop}" x2="${HOT_X}" y2="${trunkBot}" stroke="#cc3300" stroke-width="4" stroke-linecap="round"/>`;
+  // DWV stack
+  html += `<line x1="${DWV_X}" y1="${trunkTop}" x2="${DWV_X}" y2="${trunkBot}" stroke="#888" stroke-width="3" stroke-dasharray="7,3"/>`;
+  // Vent stack
+  html += `<line x1="${VENT_X}" y1="${fY[0]+18}" x2="${VENT_X}" y2="${fY[floors.length-2]+floorH}" stroke="#bbb" stroke-width="1.5" stroke-dasharray="3,5"/>`;
+  html += `<text x="${VENT_X}" y="${fY[0]+12}" font-family="monospace" font-size="6.5" fill="#aaa" text-anchor="middle">VENT</text>`;
+
+  // Trunk labels at bottom
+  html += `<text x="${TRUNK_X}" y="${trunkBot+10}" font-family="monospace" font-size="5.5" fill="#0077cc" text-anchor="middle">C</text>`;
+  html += `<text x="${HOT_X}"   y="${trunkBot+10}" font-family="monospace" font-size="5.5" fill="#cc3300" text-anchor="middle">H</text>`;
+  html += `<text x="${DWV_X}"   y="${trunkBot+10}" font-family="monospace" font-size="5.5" fill="#888"    text-anchor="middle">D</text>`;
+
+  // ── UTILITY ZONE ──
+  const uMid = utilTop + utilH / 2 + 4;
+  // Water meter
+  html += `<rect x="82" y="${uMid-16}" width="58" height="30" rx="4" fill="white" stroke="#004499" stroke-width="1.2"/>`;
+  html += `<text x="111" y="${uMid-4}" font-family="monospace" font-size="7" font-weight="bold" fill="#004499" text-anchor="middle">WATER METER</text>`;
+  html += `<text x="111" y="${uMid+6}" font-family="monospace" font-size="6" fill="#666" text-anchor="middle">City Supply In</text>`;
+  // Line from meter to cold trunk
+  html += `<line x1="82" y1="${uMid}" x2="${DWV_X+2}" y2="${uMid}" stroke="#0077cc" stroke-width="2"/>`;
+  html += `<polygon points="${DWV_X+2},${uMid-3} ${DWV_X+9},${uMid} ${DWV_X+2},${uMid+3}" fill="#0077cc"/>`;
+
+  // Water heater
+  html += `<rect x="155" y="${uMid-18}" width="72" height="36" rx="4" fill="#fff8f0" stroke="#cc3300" stroke-width="1.5"/>`;
+  html += `<text x="191" y="${uMid-6}" font-family="monospace" font-size="7" font-weight="bold" fill="#cc3300" text-anchor="middle">WATER HEATER</text>`;
+  html += `<text x="191" y="${uMid+3}" font-family="monospace" font-size="6" fill="#666" text-anchor="middle">Setpoint: 140°F</text>`;
+  html += `<text x="191" y="${uMid+12}" font-family="monospace" font-size="6" fill="#666" text-anchor="middle">T&amp;P Relief Valve</text>`;
+  // Cold in to heater
+  html += `<line x1="${TRUNK_X}" y1="${uMid-8}" x2="155" y2="${uMid-8}" stroke="#0077cc" stroke-width="1.8"/>`;
+  html += `<polygon points="153,${uMid-11} 160,${uMid-8} 153,${uMid-5}" fill="#0077cc"/>`;
+  // Hot out from heater
+  html += `<line x1="155" y1="${uMid+8}" x2="${HOT_X}" y2="${uMid+8}" stroke="#cc3300" stroke-width="1.8"/>`;
+  html += `<polygon points="${HOT_X+2},${uMid+5} ${HOT_X+9},${uMid+8} ${HOT_X+2},${uMid+11}" fill="#cc3300"/>`;
+
+  // Drain to sewer
+  html += `<line x1="${DWV_X}" y1="${trunkBot}" x2="${W-MARGIN-5}" y2="${trunkBot}" stroke="#888" stroke-width="2" stroke-dasharray="6,3"/>`;
+  html += `<text x="${W-MARGIN-4}" y="${trunkBot+3}" font-family="monospace" font-size="6" fill="#999" text-anchor="end">→ SEWER</text>`;
+
+  // Shutoff valve symbol helper
+  const valve = (x, y, col) =>
+    `<circle cx="${x}" cy="${y}" r="5" fill="white" stroke="${col}" stroke-width="1.2"/>` +
+    `<text x="${x}" y="${y+2}" font-family="monospace" font-size="5" font-weight="bold" fill="${col}" text-anchor="middle">SV</text>`;
+
+  // ── FLOOR FIXTURES ──
+  floors.forEach((fl, i) => {
+    if (i === floors.length - 1) return; // skip utility, already drawn
+    const fy = fY[i];
+    const midY = fy + floorH / 2 + 8;
+
+    fl.fixtures.forEach(fix => {
+      const fx = fix.x;
+      const bw = 120, bh = 72;
+      const bx = fx - bw / 2, by = midY - bh / 2;
+      const rc = riskColor(fix.risk);
+      const rbg = riskBg(fix.risk);
+
+      // Fixture box
+      html += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="5" fill="${rbg}" stroke="${rc}" stroke-width="1.3"/>`;
+      // Title bar
+      html += `<rect x="${bx}" y="${by}" width="${bw}" height="16" rx="5" fill="${rc}"/>`;
+      html += `<rect x="${bx}" y="${by+8}" width="${bw}" height="8" fill="${rc}"/>`;
+      html += `<text x="${bx+5}" y="${by+11}" font-family="monospace" font-size="6.5" font-weight="bold" fill="white">${fix.name}</text>`;
+      // Risk dot
+      html += `<circle cx="${bx+bw-8}" cy="${by+22}" r="5" fill="${rc}"/>`;
+      // Items
+      fix.items.forEach((item, ii) => {
+        const iy = by + 26 + ii * 12;
+        if (iy > by + bh - 4) return;
+        html += `<circle cx="${bx+8}" cy="${iy+2}" r="2.5" fill="${rc}" opacity="0.7"/>`;
+        html += `<text x="${bx+14}" y="${iy+5}" font-family="monospace" font-size="5.8" fill="#333">${item}</text>`;
+      });
+
+      // Branch pipes from trunk to fixture
+      const pipeY = midY - 4;
+      const pipeY2 = midY + 6;
+      const drainY = midY + 16;
+
+      // Cold branch
+      html += `<line x1="${TRUNK_X}" y1="${pipeY}" x2="${bx}" y2="${pipeY}" stroke="#0077cc" stroke-width="1.8"/>`;
+    });
+  });
+  // end of unused block
+  void 0;
+}
+const _unusedClose = 1;
 
 // ── DEVICE CHECKLIST ──
 function renderDeviceChecklist() {
@@ -1094,6 +1352,8 @@ function addSample() {
     </div>
   `;
   document.getElementById('sample-list').appendChild(el);
+  wireInputListeners();
+  renderDiagram();
 }
 
 function removeSample(id) {
@@ -1344,6 +1604,432 @@ function exportPDF() {
 }
 
 function showDashReport() { showScreen('screen-dash'); }
+
+// ── LIVE DIAGRAM UPDATE — wire all NEW tab inputs ──
+function wireInputListeners() {
+  // Building profile fields
+  ['bldg-name','bldg-type','bldg-floors','bldg-addr','bldg-year','bldg-occ','water-source','entry-pts'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => renderDiagram());
+    if (el) el.addEventListener('change', () => renderDiagram());
+  });
+  // Device checkboxes
+  DEVICES.forEach(d => {
+    const el = document.getElementById('dev_' + d.id);
+    if (el) el.addEventListener('change', () => renderDiagram());
+  });
+  // Sample list — use event delegation on the container
+  const sl = document.getElementById('sample-list');
+  if (sl) sl.addEventListener('input', () => renderDiagram());
+  if (sl) sl.addEventListener('change', () => renderDiagram());
+}
+
+// ── BUILD DIAGRAM SVG from live form state ──
+function buildDiagramSVG(data) {
+  // data = { bldgName, bldgType, floors, devices[], samples[], waterSource, entryPoints }
+  const { bldgName, bldgType, floors, devices, samples, waterSource, entryPoints } = data;
+
+  const W = 420;
+  const TRUNK_X = 38, HOT_X = 52, DWV_X = 64, VENT_X = 408;
+  const MARGIN = 18;
+  const FIXTURE_W = 118, FIXTURE_H = 72;
+
+  const riskColor = r => r==='high'?'#c42b00':r==='medium'?'#c45c00':'#1a6b3c';
+  const riskBg    = r => r==='high'?'#fff0f0':r==='medium'?'#fff8f0':'#f0fff4';
+
+  const valve = (x, y, col) =>
+    `<circle cx="${x}" cy="${y}" r="5" fill="white" stroke="${col}" stroke-width="1.2"/>` +
+    `<text x="${x}" y="${y+2.5}" font-family="monospace" font-size="5" font-weight="bold" fill="${col}" text-anchor="middle">SV</text>`;
+
+  // ── Group sample points by floor ──
+  const floorMap = {}; // floor label -> [sample]
+  samples.forEach(s => {
+    const key = s.floor ? `Floor ${s.floor}` : 'Unassigned';
+    if (!floorMap[key]) floorMap[key] = [];
+    floorMap[key].push(s);
+  });
+
+  // ── Build floor zones ──
+  // Always include: Rooftop (if cooling tower checked), each sample floor, Utility at bottom
+  const floorZones = [];
+
+  // Rooftop zone — show if cooling tower or humidifier is checked
+  const hasCoolingTower = devices.includes('Cooling Tower(s)');
+  const hasHumidifier   = devices.includes('Humidifiers / HVAC');
+  if (hasCoolingTower || hasHumidifier) {
+    const rtFixtures = [];
+    if (hasCoolingTower) rtFixtures.push({ name:'Cooling Tower', device:'Cooling Tower', risk:'high', coldOnly:true,
+      items:['Makeup water in','Blowdown → drain','Biocide program req.'] });
+    if (hasHumidifier)   rtFixtures.push({ name:'HVAC Humidifier', device:'Humidifier', risk:'medium', coldOnly:true,
+      items:['Cold in → steam','Condensate drain','Filter monthly'] });
+    floorZones.push({ label:'ROOFTOP', color:'#e8f0ff', border:'#3355cc', fixtures: rtFixtures });
+  }
+
+  // Sample point floors — sorted numerically desc
+  const floorKeys = Object.keys(floorMap).sort((a,b) => {
+    const na = parseInt(a.replace(/\D/g,'')) || 0;
+    const nb = parseInt(b.replace(/\D/g,'')) || 0;
+    return nb - na;
+  });
+  floorKeys.forEach(fk => {
+    const spList = floorMap[fk];
+    const hasHigh = spList.some(s=>s.risk==='high');
+    const hasMed  = spList.some(s=>s.risk==='medium');
+    const zoneRisk = hasHigh ? 'high' : hasMed ? 'medium' : 'low';
+    const border = riskColor(zoneRisk);
+    const color  = riskBg(zoneRisk);
+    const highFlag = hasHigh ? '  ⚠ HIGH RISK' : '';
+
+    const fixtures = spList.slice(0,2).map(s => {
+      const loc = s.location || s.device || 'Sample Point';
+      const items = [];
+      const isHot = ['Hot Water Outlet','Showerhead','Distal Faucet'].includes(s.device);
+      const isColdOnly = ['Cold Water Inlet','Eyewash Station','Ice Machine','Drinking Fountain'].includes(s.device);
+      items.push(isColdOnly ? 'Cold only → fixture' : 'Cold in → fixture');
+      if (!isColdOnly) items.push('Hot in → fixture');
+      items.push('Drain → P-trap → stack');
+      if (s.temp != null) items.push(`Temp: ${s.temp}°F${s.temp < 122 && isHot ? ' ⚠' : s.temp > 68 && !isHot ? ' ⚠':''}`);
+      if (s.chlorine != null) items.push(`Cl₂: ${s.chlorine} ppm${s.chlorine < 0.2 ? ' ⚠':''}`);
+      if (s.visual && s.visual !== 'No issues observed' && s.visual !== '') items.push(s.visual);
+      return { name: loc.length > 20 ? loc.slice(0,20)+'…' : loc, device: s.device, risk: s.risk,
+               coldOnly: isColdOnly, items };
+    });
+
+    floorZones.push({ label: `${fk.toUpperCase()}${highFlag}`, color, border, fixtures });
+  });
+
+  // If no sample points yet, show placeholder floors based on floor count input
+  if (floorKeys.length === 0) {
+    const numFloors = Math.min(parseInt(floors) || 3, 6);
+    for (let i = numFloors; i >= 1; i--) {
+      const isTop = i === numFloors;
+      floorZones.push({
+        label: `FLOOR ${i}${isTop?' — TOP FLOOR':''}`,
+        color: '#f7f8f7', border: '#aabbaa',
+        fixtures: [{
+          name: 'Add sample points →', device:'', risk:'low', coldOnly:false,
+          items:['Enter readings in NEW tab','Diagram updates live']
+        }]
+      });
+    }
+  }
+
+  // Always add utility at bottom
+  floorZones.push({ label:'UTILITY / BASEMENT', color:'#f0f4ff', border:'#004499', fixtures:[] });
+
+  // ── Calculate heights ──
+  const FLOOR_H  = Math.min(100, Math.max(72, Math.floor(580 / Math.max(floorZones.length, 3))));
+  const UTIL_H   = 80;
+  const GAP      = 4;
+  const totalH   = (floorZones.length - 1) * (FLOOR_H + GAP) + UTIL_H + 20;
+
+  // Y positions
+  const fY = [];
+  let curY = 10;
+  for (let i = 0; i < floorZones.length - 1; i++) { fY.push(curY); curY += FLOOR_H + GAP; }
+  fY.push(curY);
+
+  const trunkTop = fY[0] + 20;
+  const trunkBot = curY + UTIL_H - 14;
+
+  let html = `<svg viewBox="0 0 ${W} ${totalH + 20}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;">`;
+
+  // ── FLOOR BACKGROUNDS ──
+  floorZones.forEach((fl, i) => {
+    const fh = i === floorZones.length - 1 ? UTIL_H : FLOOR_H;
+    html += `<rect x="${MARGIN}" y="${fY[i]}" width="${W-MARGIN*2}" height="${fh}" rx="6" fill="${fl.color}" stroke="${fl.border}" stroke-width="1.2"/>`;
+    html += `<text x="${MARGIN+8}" y="${fY[i]+13}" font-family="monospace" font-size="7.5" font-weight="bold" fill="${fl.border}">${fl.label}</text>`;
+  });
+
+  // ── TRUNK PIPES ──
+  html += `<line x1="${TRUNK_X}" y1="${trunkTop}" x2="${TRUNK_X}" y2="${trunkBot}" stroke="#0077cc" stroke-width="4" stroke-linecap="round"/>`;
+  html += `<line x1="${HOT_X}"   y1="${trunkTop}" x2="${HOT_X}"   y2="${trunkBot}" stroke="#cc3300" stroke-width="4" stroke-linecap="round"/>`;
+  html += `<line x1="${DWV_X}"   y1="${trunkTop}" x2="${DWV_X}"   y2="${trunkBot}" stroke="#888"    stroke-width="3" stroke-dasharray="7,3"/>`;
+  html += `<line x1="${VENT_X}"  y1="${fY[0]+18}" x2="${VENT_X}"  y2="${fY[floorZones.length-2]+FLOOR_H-4}" stroke="#bbb" stroke-width="1.5" stroke-dasharray="3,5"/>`;
+  html += `<text x="${VENT_X}" y="${fY[0]+12}" font-family="monospace" font-size="6" fill="#aaa" text-anchor="middle">VENT</text>`;
+
+  // Trunk labels
+  html += `<text x="${TRUNK_X}" y="${trunkBot+11}" font-family="monospace" font-size="5.5" fill="#0077cc" text-anchor="middle">¾"C</text>`;
+  html += `<text x="${HOT_X}"   y="${trunkBot+11}" font-family="monospace" font-size="5.5" fill="#cc3300" text-anchor="middle">¾"H</text>`;
+  html += `<text x="${DWV_X}"   y="${trunkBot+11}" font-family="monospace" font-size="5.5" fill="#888"    text-anchor="middle">3"D</text>`;
+
+  // ── UTILITY ZONE ──
+  const uIdx = floorZones.length - 1;
+  const uMid = fY[uIdx] + UTIL_H / 2 + 4;
+
+  // Entry points label
+  const entPts = parseInt(entryPoints) || 1;
+  html += `<text x="${MARGIN+8}" y="${fY[uIdx]+26}" font-family="monospace" font-size="6.5" fill="#004499">Water Entry Points: ${entPts}  |  Source: ${waterSource||'Municipal'}</text>`;
+
+  // Water meter
+  html += `<rect x="82" y="${uMid-16}" width="58" height="30" rx="4" fill="white" stroke="#004499" stroke-width="1.2"/>`;
+  html += `<text x="111" y="${uMid-4}" font-family="monospace" font-size="6.5" font-weight="bold" fill="#004499" text-anchor="middle">WATER METER</text>`;
+  html += `<text x="111" y="${uMid+7}" font-family="monospace" font-size="6" fill="#666" text-anchor="middle">City Supply In</text>`;
+  html += `<line x1="82" y1="${uMid}" x2="${DWV_X+2}" y2="${uMid}" stroke="#0077cc" stroke-width="2"/>`;
+  html += `<polygon points="${DWV_X+2},${uMid-3} ${DWV_X+9},${uMid} ${DWV_X+2},${uMid+3}" fill="#0077cc"/>`;
+
+  // Water heater
+  html += `<rect x="154" y="${uMid-18}" width="74" height="36" rx="4" fill="#fff8f0" stroke="#cc3300" stroke-width="1.5"/>`;
+  html += `<text x="191" y="${uMid-7}" font-family="monospace" font-size="6.5" font-weight="bold" fill="#cc3300" text-anchor="middle">WATER HEATER</text>`;
+  html += `<text x="191" y="${uMid+2}" font-family="monospace" font-size="6" fill="#666" text-anchor="middle">Setpoint ≥ 140°F</text>`;
+  html += `<text x="191" y="${uMid+11}" font-family="monospace" font-size="6" fill="#666" text-anchor="middle">T&amp;P Relief Valve</text>`;
+  html += `<line x1="${TRUNK_X}" y1="${uMid-8}" x2="154" y2="${uMid-8}" stroke="#0077cc" stroke-width="1.8"/>`;
+  html += `<polygon points="152,${uMid-11} 159,${uMid-8} 152,${uMid-5}" fill="#0077cc"/>`;
+  html += `<line x1="154" y1="${uMid+8}" x2="${HOT_X}" y2="${uMid+8}" stroke="#cc3300" stroke-width="1.8"/>`;
+  html += `<polygon points="${HOT_X+2},${uMid+5} ${HOT_X+9},${uMid+8} ${HOT_X+2},${uMid+11}" fill="#cc3300"/>`;
+
+  // Drain to sewer
+  html += `<line x1="${DWV_X}" y1="${trunkBot}" x2="${W-MARGIN-5}" y2="${trunkBot}" stroke="#888" stroke-width="2" stroke-dasharray="5,3"/>`;
+  html += `<text x="${W-MARGIN-4}" y="${trunkBot+4}" font-family="monospace" font-size="6" fill="#999" text-anchor="end">→ MUNICIPAL SEWER</text>`;
+
+  // Additional devices below heater (softener, etc.)
+  const hasSoftener = devices.includes('Water Softener / Treatment');
+  if (hasSoftener) {
+    html += `<rect x="240" y="${uMid-14}" width="68" height="28" rx="4" fill="#f0fff4" stroke="#1a6b3c" stroke-width="1.2"/>`;
+    html += `<text x="274" y="${uMid-3}" font-family="monospace" font-size="6.5" font-weight="bold" fill="#1a6b3c" text-anchor="middle">WATER SOFTENER</text>`;
+    html += `<text x="274" y="${uMid+7}" font-family="monospace" font-size="6" fill="#666" text-anchor="middle">Treatment Unit</text>`;
+  }
+
+  // ── FLOOR FIXTURES ──
+  floorZones.forEach((fl, i) => {
+    if (i === floorZones.length - 1) return; // skip utility
+    const fy = fY[i];
+    const midY = fy + FLOOR_H / 2 + 10;
+    const xPositions = fl.fixtures.length === 1 ? [W/2] : [W*0.33, W*0.69];
+
+    fl.fixtures.forEach((fix, fi) => {
+      const fx = xPositions[fi] || W/2;
+      const bx = Math.max(MARGIN+72, Math.min(W-MARGIN-FIXTURE_W, fx - FIXTURE_W/2));
+      const by = midY - FIXTURE_H/2;
+      const rc = riskColor(fix.risk);
+      const rbg = riskBg(fix.risk);
+
+      // Box
+      html += `<rect x="${bx}" y="${by}" width="${FIXTURE_W}" height="${FIXTURE_H}" rx="5" fill="${rbg}" stroke="${rc}" stroke-width="1.3"/>`;
+      // Title bar
+      html += `<rect x="${bx}" y="${by}" width="${FIXTURE_W}" height="15" rx="5" fill="${rc}"/>`;
+      html += `<rect x="${bx}" y="${by+8}" width="${FIXTURE_W}" height="7" fill="${rc}"/>`;
+      html += `<text x="${bx+4}" y="${by+11}" font-family="monospace" font-size="6" font-weight="bold" fill="white">${fix.name}</text>`;
+      // Risk indicator dot
+      html += `<circle cx="${bx+FIXTURE_W-8}" cy="${by+22}" r="5" fill="${rc}"/>`;
+      html += `<text x="${bx+FIXTURE_W-8}" y="${by+24.5}" font-family="monospace" font-size="4.5" font-weight="bold" fill="white" text-anchor="middle">${fix.risk.slice(0,1).toUpperCase()}</text>`;
+
+      // Items
+      fix.items.slice(0,4).forEach((item, ii) => {
+        const iy = by + 24 + ii * 11;
+        if (iy > by + FIXTURE_H - 4) return;
+        const itemColor = item.includes('⚠') ? '#c42b00' : '#444';
+        html += `<circle cx="${bx+7}" cy="${iy+2}" r="2.2" fill="${rc}" opacity="0.6"/>`;
+        html += `<text x="${bx+13}" y="${iy+5}" font-family="monospace" font-size="5.5" fill="${itemColor}">${item}</text>`;
+      });
+
+      // ── Branch pipes ──
+      const pipeY  = midY - 6;
+      const pipeY2 = midY + 5;
+      const drainY = midY + 18;
+
+      // Cold supply branch
+      html += `<line x1="${TRUNK_X}" y1="${pipeY}" x2="${bx}" y2="${pipeY}" stroke="#0077cc" stroke-width="1.8"/>`;
+      html += `<polygon points="${bx-1},${pipeY-3} ${bx+6},${pipeY} ${bx-1},${pipeY+3}" fill="#0077cc"/>`;
+      html += valve(TRUNK_X + 15, pipeY, '#0077cc');
+
+      // Hot supply branch (skip for cold-only fixtures)
+      if (!fix.coldOnly) {
+        html += `<line x1="${HOT_X}" y1="${pipeY2}" x2="${bx}" y2="${pipeY2}" stroke="#cc3300" stroke-width="1.8"/>`;
+        html += `<polygon points="${bx-1},${pipeY2-3} ${bx+6},${pipeY2} ${bx-1},${pipeY2+3}" fill="#cc3300"/>`;
+        html += valve(HOT_X + 15, pipeY2, '#cc3300');
+      }
+
+      // Drain return to stack
+      html += `<line x1="${bx}" y1="${drainY}" x2="${DWV_X}" y2="${drainY}" stroke="#888" stroke-width="1.5" stroke-dasharray="5,3"/>`;
+      html += `<polygon points="${DWV_X+1},${drainY-3} ${DWV_X+1},${drainY+3} ${DWV_X-5},${drainY}" fill="#888"/>`;
+
+      // Vent tie-in
+      html += `<line x1="${bx+FIXTURE_W}" y1="${by+FIXTURE_H/2}" x2="${VENT_X}" y2="${by+FIXTURE_H/2}" stroke="#ccc" stroke-width="1" stroke-dasharray="3,4"/>`;
+    });
+  });
+
+  // Building name watermark at top
+  if (bldgName) {
+    html += `<text x="${W/2}" y="${fY[0]+7}" font-family="monospace" font-size="7" fill="#0f4a2a" text-anchor="middle" opacity="0.6">${bldgName} — Water Flow Schematic</text>`;
+  }
+
+  html += `</svg>`;
+  return html;
+}
+
+// ── READ LIVE FORM DATA ──
+function getLiveFormData() {
+  const samples = [];
+  document.querySelectorAll('.sample-row').forEach(row => {
+    const temp = parseFloat(row.querySelector('.sp-temp')?.value);
+    const cl   = parseFloat(row.querySelector('.sp-cl')?.value);
+    const device = row.querySelector('.sp-device')?.value || '';
+    const isHot  = ['Hot Water Outlet','Showerhead','Distal Faucet'].includes(device);
+    const isCold = ['Cold Water Inlet','Eyewash Station','Ice Machine'].includes(device);
+    let risk = 'low';
+    if (!isNaN(temp)) {
+      if (isHot  && temp < 122) risk = 'high';
+      else if (isHot && temp < 140) risk = 'medium';
+      if (isCold && temp > 77)  risk = 'high';
+      else if (isCold && temp > 68) risk = 'medium';
+    }
+    if (!isNaN(cl) && cl < 0.2) risk = risk === 'low' ? 'medium' : 'high';
+    samples.push({
+      location: row.querySelector('.sp-location')?.value || '',
+      device,
+      floor: row.querySelector('.sp-floor')?.value || '',
+      temp: isNaN(temp) ? null : temp,
+      chlorine: isNaN(cl) ? null : cl,
+      visual: row.querySelector('.sp-visual')?.value || '',
+      risk
+    });
+  });
+
+  return {
+    bldgName:    document.getElementById('bldg-name')?.value || '',
+    bldgType:    document.getElementById('bldg-type')?.value || '',
+    floors:      document.getElementById('bldg-floors')?.value || '1',
+    waterSource: document.getElementById('water-source')?.value || 'Municipal',
+    entryPoints: document.getElementById('entry-pts')?.value || '1',
+    devices:     DEVICES.filter(d => document.getElementById('dev_'+d.id)?.checked).map(d=>d.label),
+    samples
+  };
+}
+
+// ── RENDER DIAGRAM from live data ──
+function renderDiagram() {
+  const svg = document.getElementById('flow-diagram-svg');
+  if (!svg) return;
+  const data = getLiveFormData();
+  const newSVG = buildDiagramSVG(data);
+  // Replace just the inner content of the container
+  const container = svg.parentElement;
+  container.innerHTML = newSVG;
+}
+
+// ── UPDATED exportPDF — includes live diagram ──
+function exportPDF() {
+  if (!inspections.length) { showToast('No inspections to export'); return; }
+  const r = inspections[0];
+
+  // Build diagram SVG from saved inspection data
+  const diagData = {
+    bldgName:    r.building.name,
+    bldgType:    r.building.type || '',
+    floors:      r.building.floors || '1',
+    waterSource: r.building.waterSource || 'Municipal',
+    entryPoints: r.building.entryPoints || '1',
+    devices:     r.devices || [],
+    samples:     r.samples || []
+  };
+  const diagramSVG = buildDiagramSVG(diagData);
+
+  const w = window.open('','_blank');
+  w.document.write(`
+    <html><head><title>WMP Inspection Report — ${r.building.name}</title>
+    <style>
+      body{font-family:sans-serif;padding:32px;color:#111;max-width:860px;margin:0 auto;}
+      h1{color:#0f4a2a;border-bottom:3px solid #0f4a2a;padding-bottom:8px;margin-bottom:4px;}
+      h2{color:#1a6b3c;font-size:0.95rem;margin:20px 0 6px;text-transform:uppercase;letter-spacing:0.06em;}
+      table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:0.82rem;}
+      th{background:#0f4a2a;color:#fff;padding:7px 8px;text-align:left;font-size:0.75rem;}
+      td{padding:6px 8px;border-bottom:1px solid #dde;}
+      tr:nth-child(even) td{background:#f7f8f7;}
+      .badge-h{color:#c42b00;font-weight:700;} .badge-m{color:#c45c00;font-weight:700;} .badge-l{color:#1a6b3c;font-weight:700;}
+      .meta{color:#666;font-size:0.78rem;}
+      .warn{background:#fff3e6;padding:10px 12px;border-left:4px solid #c45c00;margin:10px 0;font-size:0.82rem;}
+      .err{background:#fff0f0;padding:10px 12px;border-left:4px solid #c42b00;margin:10px 0;font-size:0.82rem;}
+      .diagram-wrap{margin:16px 0;border:1px solid #dde;border-radius:8px;overflow:hidden;background:#f0f4f8;padding:8px;}
+      .diagram-wrap svg{width:100%;max-width:800px;display:block;margin:0 auto;}
+      .page-break{page-break-before:always;}
+      .stat-row{display:flex;gap:10px;margin:10px 0;}
+      .stat-box{flex:1;padding:10px;border-radius:6px;text-align:center;}
+      .stat-val{font-size:1.6rem;font-weight:800;line-height:1;}
+      .stat-lbl{font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;color:#666;margin-top:3px;}
+      @media print{button{display:none!important}.no-print{display:none!important}}
+    </style></head><body>
+
+    <div style="background:#0f4a2a;color:white;padding:14px 20px;margin:-32px -32px 20px;display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="font-size:1.2rem;font-weight:800;letter-spacing:0.06em;">AquaGuard WMP</div>
+        <div style="font-size:0.65rem;opacity:0.7;letter-spacing:0.1em;">LEGIONELLA WATER MANAGEMENT PROGRAM · ASHRAE 188-2021</div>
+      </div>
+      <div style="text-align:right;font-size:0.72rem;opacity:0.85;">${r.building.name}<br>${r.date} · ${r.inspector}</div>
+    </div>
+
+    ${r.overallRisk === 'high' ? `<div class="err"><strong>⚠ OVERALL SITE RISK: HIGH — Immediate corrective action required.</strong></div>` :
+      r.overallRisk === 'medium' ? `<div class="warn"><strong>⚠ OVERALL SITE RISK: MEDIUM — Corrective actions required.</strong></div>` : ''}
+
+    <h2>Building Information</h2>
+    <table><tr><th>Field</th><th>Value</th><th>Field</th><th>Value</th></tr>
+    <tr><td><b>Facility</b></td><td>${r.building.name}</td><td><b>Inspector</b></td><td>${r.inspector}</td></tr>
+    <tr><td><b>Address</b></td><td>${r.building.address||'—'}</td><td><b>Certification</b></td><td>${r.cert||'—'}</td></tr>
+    <tr><td><b>Building Type</b></td><td>${r.building.type||'—'}</td><td><b>Date / Time</b></td><td>${r.date} at ${r.time}</td></tr>
+    <tr><td><b>Floors</b></td><td>${r.building.floors||'—'}</td><td><b>Year Built</b></td><td>${r.building.year||'—'}</td></tr>
+    <tr><td><b>Occupancy</b></td><td>${r.building.occupancy||'—'}</td><td><b>Water Source</b></td><td>${r.building.waterSource||'—'}</td></tr>
+    </table>
+
+    <div class="stat-row">
+      <div class="stat-box" style="background:#f0fff4;border:1px solid #1a6b3c;">
+        <div class="stat-val" style="color:#0f4a2a;">${r.samples?.length||0}</div>
+        <div class="stat-lbl">Sample Points</div>
+      </div>
+      <div class="stat-box" style="background:#fff0f0;border:1px solid #c42b00;">
+        <div class="stat-val" style="color:#c42b00;">${r.samples?.filter(s=>s.risk==='high').length||0}</div>
+        <div class="stat-lbl">High Risk</div>
+      </div>
+      <div class="stat-box" style="background:#fff8f0;border:1px solid #c45c00;">
+        <div class="stat-val" style="color:#c45c00;">${r.samples?.filter(s=>s.risk==='medium').length||0}</div>
+        <div class="stat-lbl">Medium Risk</div>
+      </div>
+      <div class="stat-box" style="background:#f0fff4;border:1px solid #1a6b3c;">
+        <div class="stat-val" style="color:#1a6b3c;">${r.samples?.filter(s=>s.risk==='low').length||0}</div>
+        <div class="stat-lbl">Low / Clear</div>
+      </div>
+      <div class="stat-box" style="background:#f0f4ff;border:1px solid #3355cc;">
+        <div class="stat-val" style="color:#3355cc;">${r.devices?.length||0}</div>
+        <div class="stat-lbl">Devices Inv.</div>
+      </div>
+    </div>
+
+    <h2>Water Risk Device Inventory</h2>
+    <p style="font-size:0.82rem;">${(r.devices||[]).join(' · ')||'None recorded'}</p>
+
+    <h2>Sample Point Results</h2>
+    <table>
+      <tr><th>ID</th><th>Location</th><th>Device</th><th>Floor</th><th>Temp °F</th><th>Cl₂ ppm</th><th>pH</th><th>Visual</th><th>Risk</th></tr>
+      ${(r.samples||[]).map((s,i)=>`
+        <tr style="${s.risk==='high'?'background:#fff0f0':s.risk==='medium'?'background:#fff8f0':''}">
+          <td style="font-family:monospace;font-size:0.75rem;">SP-${String(i+1).padStart(2,'0')}</td>
+          <td>${s.location||'—'}</td><td>${s.device||'—'}</td><td>${s.floor||'—'}</td>
+          <td class="${s.risk==='high'?'badge-h':s.risk==='medium'?'badge-m':'badge-l'}">${s.temp??'—'}</td>
+          <td class="${s.risk==='high'?'badge-h':s.risk==='medium'?'badge-m':'badge-l'}">${s.chlorine??'—'}</td>
+          <td>${s.ph||'—'}</td><td>${s.visual||'—'}</td>
+          <td class="${s.risk==='high'?'badge-h':s.risk==='medium'?'badge-m':'badge-l'}"><b>${s.risk?.toUpperCase()||'—'}</b></td>
+        </tr>`).join('')}
+    </table>
+
+    ${r.corrections?`<h2>Corrective Actions</h2><div class="${r.overallRisk==='high'?'err':'warn'}">${r.corrections.replace(/\n/g,'<br>')}</div>`:''}
+    ${r.notes?`<h2>Inspector Notes</h2><p style="font-size:0.82rem;">${r.notes.replace(/\n/g,'<br>')}</p>`:''}
+    ${r.reinspectDate?`<p style="font-size:0.82rem;"><strong>Re-inspection Due:</strong> ${r.reinspectDate}</p>`:''}
+
+    <div class="page-break"></div>
+    <h2>Water Flow Diagram — ${r.building.name}</h2>
+    <p class="meta">Schematic reflects devices checked and sample points recorded during this inspection. Risk colors reflect field readings against ASHRAE 188 thresholds.</p>
+    <div class="diagram-wrap">${diagramSVG}</div>
+
+    <br>
+    <p class="meta" style="border-top:1px solid #ddd;padding-top:10px;">
+      Report ID: AQG-${Date.now().toString().slice(-8)} · Generated ${new Date().toLocaleString()} · AquaGuard WMP Field Inspector · ASHRAE 188-2021<br>
+      This report is for informational purposes. Confirm findings with laboratory Legionella culture testing as required by local health codes.
+    </p>
+    <br><button onclick="window.print()" style="background:#0f4a2a;color:white;border:none;padding:12px 24px;border-radius:6px;font-size:0.9rem;cursor:pointer;">🖨 Print / Save as PDF</button>
+    </body></html>
+  `);
+  w.document.close();
+  showToast('✓ PDF report opened');
+}
 
 // ── SETTINGS ──
 function saveSettings() { showToast('✓ Thresholds saved'); }
